@@ -1,0 +1,270 @@
+```{r}
+library(imagefx)
+library(jpeg)
+```
+```{r}
+##dirección de imagenes
+img.dir <- '/home/yiyo/datos/tesis/video_youtube/'
+
+##imagen a leer
+img.file <- 'frame15.jpg'
+
+volcan <- readJPEG(paste(img.dir, img.file, sep=""))
+```
+```{r}
+dim(volcan)
+```
+
+```{r}
+image2(volcan, asp=1,xlab="image rows", ylab="image columns")
+```
+```{r}
+##definir region a cortar
+xleft = 150 ##cambiar a 100 para darle mas altura
+xright = 450
+ybottom = 250
+ytop = 750
+```
+```{r}
+##cortar imagen con los puntos definidos 
+crop.auto <- crop.image(volcan,xleft,ybottom,xright,ytop)
+```
+```{r}
+##aislar imagen cortada
+img.crop <- crop.auto$img.crop
+```
+```{r}
+##imagen original y cortadas
+plot.new()
+split.screen(c(1,2))
+screen(1)
+image2(volcan,asp=1,xlab="",ylab="", main= 'Original')
+screen(2)
+image2(img.crop,asp=1,ylab="",xlab="", main='cortada')
+
+```
+
+```{r}
+##separar la imagen en canales RGB
+img.r <- img.crop[,,1]
+img.g <- img.crop[,,2]
+img.b <- img.crop[,,3]
+```
+```{r}
+##restar el promedio de cada color de cada matriz de canal
+img.r.dmean <- img.r - mean(img.r)
+img.g.dmean <- img.g - mean(img.g)
+img.b.dmean <- img.b - mean(img.g)
+```
+```{r}
+##encontrar la mejor tendencia en cada matriz de canal de color
+img.r.trend <- fit3d(img.r.dmean)
+img.g.trend <- fit3d(img.g.dmean)
+img.b.trend <- fit3d(img.b.dmean)
+```
+```{r}
+##substraer la tendencia de cada canal de color
+img.r.dtrend <- img.r.dmean - img.r.trend
+img.g.dtrend <- img.g.dmean - img.g.trend
+img.b.dtrend <- img.b.dmean - img.b.trend
+```
+```{r}
+##graficar el canal rojo, original y sin tendencia
+plot.new()
+split.screen(c(1,2))
+screen(1)
+image2(img.r,asp=1,xlab="",ylab="",main="canal rojo")
+screen(2)
+image2(img.r.dtrend,asp=1,xlab="",ylab="",main="canal rojo sin tendencia")
+```
+```{r}
+## definir un valor sigma para el filtro Gaussiano dependiendo la actividad común
+sig=29
+```
+```{r}
+##construir una mascara Gaussiana cuyas dimensiones concuerden con la imagen
+gaus <- build.gaus(xdim=nrow(img.r.dtrend),ydim=ncol(img.r.dtrend),sig.x=sig)
+```
+```{r}
+##encontrar la locacion del valor de pixel en cada canal que se desvia mas del promedio
+max.r = which(abs(img.r.dtrend)==max(abs(img.r.dtrend)),arr.ind=TRUE)
+max.g = which(abs(img.g.dtrend)==max(abs(img.g.dtrend)),arr.ind=TRUE)
+max.b = which(abs(img.b.dtrend)==max(abs(img.b.dtrend)),arr.ind=TRUE)
+```
+```{r}
+##definir un tamaño de ventana usada en el algoritmo componente conectado
+win.size=0.05
+```
+```{r}
+##extraer la forma de gota de cada canal
+blob.r <- blob.extract(img.r.dtrend,max.r,win.size,gaus)
+blob.g <- blob.extract(img.g.dtrend,max.g,win.size,gaus)
+blob.b <- blob.extract(img.b.dtrend,max.b,win.size,gaus)
+```
+
+
+```{r}
+#graficado
+blob.coords.r <- blob.r$xy.coords
+blob.coords.r[,1] <- blob.r$xy.coords[,2]
+blob.coords.r[,2] <- (blob.r$xy.coords[,1]-nrow(img.r))*-1
+
+blob.coords.g <- blob.g$xy.coords
+blob.coords.g[,1] <- blob.g$xy.coords[,2]
+blob.coords.g[,2] <- (blob.g$xy.coords[,1]-nrow(img.g))*-1
+
+blob.coords.b <- blob.b$xy.coords
+blob.coords.b[,1] <- blob.b$xy.coords[,2]
+blob.coords.b[,2] <- (blob.b$xy.coords[,1]-nrow(img.b))*-1
+
+close.screen(all.screens = TRUE)
+split.screen(c(1,3))
+
+screen(1)
+par(mar=c(0,0,2,0))
+image2(img.r,asp=1,axes=FALSE)
+points(blob.coords.r,col=rgb(1,0,0,alpha = 0.05),pch=16,cex=0.3)
+title('canal rojo',line=0,font=2,col='red',cex=2)
+
+screen(2)
+par(mar=c(0,0,2,0))
+image2(img.g,asp=1,axes=FALSE)
+points(blob.coords.g,col=rgb(0,1,0,alpha = 0.05),pch=16,cex=0.3)
+title('canal verde',line=0,font=2,col='darkgreen',cex=2)
+
+screen(3)
+par(mar=c(0,0,2,0))
+image2(img.b,asp=1,axes=FALSE)
+points(blob.coords.b,col=rgb(0,0,1,alpha=0.05),pch=16,cex=0.3)
+title('canal azul',line=0,font=2,col='blue',cex=2)
+```
+
+
+```{r}
+blob.stats.r <- calc.blob.stats(img.r.dtrend, blob.r$xy.coords)
+blob.stats.g <- calc.blob.stats(img.g.dtrend, blob.g$xy.coords)
+blob.stats.b <- calc.blob.stats(img.b.dtrend, blob.b$xy.coords)
+```
+```{r}
+print(blob.stats.r)
+```
+
+```{r}
+print(blob.stats.g)
+```
+```{r}
+print(blob.stats.b)
+```
+```{r}
+## nombrar el directorio con todas las imagenes
+img.dir <- '/home/yiyo/datos/tesis/video_youtube/'
+
+##listar los archivos en este directorio, deben de estar acomodados en orden de primero a ultimo
+img.files <- list.files(img.dir)
+
+##cuantas estadisticas se van a guardar
+num.stats=14
+```
+
+
+```{r}
+##matrices para almacenar todas las estadisticas de cada canal RGB
+all.blob.stats.r = matrix(NA,nrow=length(img.files),ncol=num.stats)
+all.blob.stats.g = matrix(NA,nrow=length(img.files),ncol=num.stats)
+all.blob.stats.b = matrix(NA,nrow=length(img.files),ncol=num.stats)
+```
+```{r}
+##recorrer cada imagen para realizar los pasos anteriores
+i=1
+while(i<=length(img.files)){
+  ##imagen actual
+  cur.img.file <- paste(img.dir,img.files[i],sep="")
+  
+  ##leer la imagen actual
+  cur.img <-readJPEG(cur.img.file)
+  
+  ## Preprocess the image ...
+  ##cortar imagen con los puntos definidos 
+  crop.auto <- crop.image(cur.img,xleft,ybottom,xright,ytop)
+  img.crop <- crop.auto$img.crop
+  img.r <- img.crop[,,1]
+  img.g <- img.crop[,,2]
+  img.b <- img.crop[,,3]
+  
+  ##restar el promedio de cada color de cada matriz de canal
+  img.r.dmean <- img.r - mean(img.r)
+  img.g.dmean <- img.g - mean(img.g)
+  img.b.dmean <- img.b - mean(img.g)
+  
+  ##encontrar la mejor tendencia en cada matriz de canal de color
+  img.r.trend <- fit3d(img.r.dmean)
+  img.g.trend <- fit3d(img.g.dmean)
+  img.b.trend <- fit3d(img.b.dmean)
+  
+  ##substraer la tendencia de cada canal de color
+  img.r.dtrend <- img.r.dmean - img.r.trend
+  img.g.dtrend <- img.g.dmean - img.g.trend
+  img.b.dtrend <- img.b.dmean - img.b.trend
+  
+## Perform blob detection ...
+  
+  ##construir una mascara Gaussiana cuyas dimensiones concuerden con la imagen
+  gaus <- build.gaus(xdim=nrow(img.r.dtrend),ydim=ncol(img.r.dtrend),sig.x=sig)
+  ##encontrar la locacion del valor de pixel en cada canal que se desvia mas del promedio
+  max.r = which(abs(img.r.dtrend)==max(abs(img.r.dtrend)),arr.ind=TRUE)
+  max.g = which(abs(img.g.dtrend)==max(abs(img.g.dtrend)),arr.ind=TRUE)
+  max.b = which(abs(img.b.dtrend)==max(abs(img.b.dtrend)),arr.ind=TRUE)
+  ##definir un tamaño de ventana usada en el algoritmo componente conectado
+  win.size=0.05
+  ##extraer la forma de gota de cada canal
+  blob.r <- blob.extract(img.r.dtrend,max.r,win.size,gaus)
+  blob.g <- blob.extract(img.g.dtrend,max.g,win.size,gaus)
+  blob.b <- blob.extract(img.b.dtrend,max.b,win.size,gaus)
+  
+
+## Calculate blob statistics ..
+  blob.stats.r <- calc.blob.stats(img.r.dtrend, blob.r$xy.coords)
+  blob.stats.g <- calc.blob.stats(img.g.dtrend, blob.g$xy.coords)
+  blob.stats.b <- calc.blob.stats(img.b.dtrend, blob.b$xy.coords)
+  
+  all.blob.stats.r[i,] <- blob.stats.r
+  all.blob.stats.g[i,] <- blob.stats.g
+  all.blob.stats.b[i,] <- blob.stats.b
+  
+  #siguiente archivo
+  i=i+1
+}
+```
+```{r}
+##combinar las estadisticas de cada canal RGB en una lista
+all.stats <- list(r=all.blob.stats.r, g=all.blob.stats.g, b=all.blob.stats.b)
+```
+
+
+
+```{r}
+##guardar las estadisticas en un directorio
+save(all.stats,file='/home/yiyo/datos/tesis/blob_stats.RData')
+```
+```{r}
+##escoge una estadistica de todas, en este caso la suma del canal azul
+blob.sum <- blob.stats$b[,1]
+```
+
+
+```{r}
+##graficado
+close.screen(all.screens=TRUE)
+
+
+##graficar estadisticas
+screen(1)
+plot(blob.sum,type='o',bg='gray80',xlab="",ylab='',
+pch=21, cex=0.5, ylim=c(min(blob.sum),max(blob.sum)+500),axes=FALSE)
+title(main='suma del canal azul' )
+
+mtext('amplitud normalizada', side=2,line=1)
+mtext('# tiempo(frames)', side=1,line=3)
+axis(1)
+```
+
